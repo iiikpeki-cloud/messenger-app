@@ -1,99 +1,95 @@
 const socket = io();
 
-// Состояние
-let myName = null;
-let myColor = '#3390ec';
-let activeChatId = null;
-let myChats = [];
-let myHistory = {};
-let allUsers = [];
+let myName = null, myColor = '#3390ec', activeChatId = null;
+let myChats = [], myHistory = {}, allUsers = [], isAdmin = false;
+let searchQuery = '', createType = null;
 
-// Элементы
-const loginScreen = document.getElementById('loginScreen');
-const appScreen = document.getElementById('appScreen');
-const loginInput = document.getElementById('loginInput');
-const passwordInput = document.getElementById('passwordInput');
-const loginBtn = document.getElementById('loginBtn');
-const loginError = document.getElementById('loginError');
+const defaultSettings = { theme: 'light', accent: 'blue', fontSize: 'medium', showOnline: true };
+let settings = JSON.parse(localStorage.getItem('ms_settings') || '{}');
+function applySettings() {
+  document.body.className = '';
+  if (settings.theme === 'dark') document.body.classList.add('theme-dark');
+  document.body.classList.add('accent-' + (settings.accent || 'blue'));
+  document.body.classList.add('font-' + (settings.fontSize || 'medium'));
+  localStorage.setItem('ms_settings', JSON.stringify(settings));
+}
 
-const meAvatar = document.getElementById('meAvatar');
-const meLabel = document.getElementById('meLabel');
-const createBtn = document.getElementById('createBtn');
-const searchInput = document.getElementById('searchInput');
-const chatListEl = document.getElementById('chatList');
+const els = {
+  login: document.getElementById('loginScreen'), name: document.getElementById('nameScreen'), app: document.getElementById('appScreen'),
+  loginInput: document.getElementById('loginInput'), passInput: document.getElementById('passwordInput'), loginBtn: document.getElementById('loginBtn'), loginErr: document.getElementById('loginError'),
+  nameInput: document.getElementById('displayNameInput'), saveNameBtn: document.getElementById('saveNameBtn'), nameErr: document.getElementById('nameError'),
+  meAvatar: document.getElementById('meAvatar'), meLabel: document.getElementById('meLabel'), myProfileBtn: document.getElementById('myProfileBtn'),
+  adminBtn: document.getElementById('adminBtn'), settingsBtn: document.getElementById('settingsBtn'), search: document.getElementById('searchInput'), chatList: document.getElementById('chatList'),
+  chatAvatar: document.getElementById('chatAvatar'), chatName: document.getElementById('chatName'), chatStatus: document.getElementById('chatStatus'),
+  msgs: document.getElementById('messages'), composer: document.getElementById('composer'), input: document.getElementById('messageInput'), sendBtn: document.getElementById('sendBtn'),
+  backBtn: document.getElementById('backBtn'), stickerBtn: document.getElementById('stickerBtn'), giftBtn: document.getElementById('giftBtn'),
+  createModal: document.getElementById('createModal'), createMenu: document.getElementById('createMenu'), createForm: document.getElementById('createForm'),
+  newTitle: document.getElementById('newTitle'), newMembers: document.getElementById('newMembers'), createSubmit: document.getElementById('createSubmit'),
+  stickerSheet: document.getElementById('stickerSheet'), stickerGrid: document.getElementById('stickerGrid'),
+  giftSheet: document.getElementById('giftSheet'), giftGrid: document.getElementById('giftGrid'),
+  settingsScreen: document.getElementById('settingsScreen'), settingsBack: document.getElementById('settingsBack'), settingsBody: document.getElementById('settingsBody'),
+  adminScreen: document.getElementById('adminScreen'), adminBack: document.getElementById('adminBack'), adminBody: document.getElementById('adminBody'),
+};
 
-const chatAvatarEl = document.getElementById('chatAvatar');
-const chatNameEl = document.getElementById('chatName');
-const chatStatusEl = document.getElementById('chatStatus');
-const messagesEl = document.getElementById('messages');
-const composer = document.getElementById('composer');
-const input = document.getElementById('messageInput');
-const sendBtn = document.getElementById('sendBtn');
-const backBtn = document.getElementById('backBtn');
-const stickerBtn = document.getElementById('stickerBtn');
+const initial = n => String(n||'?').charAt(0).toUpperCase();
+const esc = s => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const findUser = u => allUsers.find(x => x.username === u);
 
-// Модалки
-const createModal = document.getElementById('createModal');
-const createMenu = document.getElementById('createMenu');
-const createForm = document.getElementById('createForm');
-const newTitle = document.getElementById('newTitle');
-const newMembers = document.getElementById('newMembers');
-const createSubmit = document.getElementById('createSubmit');
-const stickerSheet = document.getElementById('stickerSheet');
-const stickerGrid = document.getElementById('stickerGrid');
+applySettings();
 
-let createType = null;
-
-// Утилиты
-function initial(name) { return String(name || '?').charAt(0).toUpperCase(); }
-function escapeHtml(str) { return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
-
-// Вход
-loginBtn.addEventListener('click', () => {
-  const username = loginInput.value.trim();
-  const password = passwordInput.value;
-  if (!username || !password) return;
-  
-  socket.emit('login', { username, password }, (res) => {
-    if (!res.ok) { loginError.textContent = res.error; return; }
-    
-    myName = res.me.username;
-    myColor = res.me.color;
-    myChats = res.chats;
-    myHistory = res.history;
-    allUsers = res.users;
-
-    meAvatar.textContent = initial(res.me.displayName);
-    meAvatar.style.background = myColor;
-    meLabel.textContent = res.me.displayName;
-
-    loginScreen.style.display = 'none';
-    appScreen.style.display = 'flex';
+els.loginBtn.onclick = () => {
+  const u = els.loginInput.value.trim(), p = els.passInput.value;
+  if (!u || !p) return;
+  socket.emit('login', { username: u, password: p }, res => {
+    if (!res.ok) { els.loginErr.textContent = res.error; return; }
+    myName = res.me.username; myColor = res.me.color; isAdmin = res.isAdmin;
+    myChats = res.chats; myHistory = res.history; allUsers = res.users;
+    els.meAvatar.textContent = initial(res.me.displayName); els.meAvatar.style.background = myColor;
+    els.meLabel.textContent = res.me.displayName;
+    if (isAdmin) els.adminBtn.style.display = 'flex';
+    els.login.style.display = 'none'; els.app.style.display = 'flex';
     renderChats();
   });
-});
+};
 
-// Список чатов
-function renderChats() {
-  chatListEl.innerHTML = '';
-  
-  // Сортируем: сначала чаты с последним сообщением, потом остальные
-  const sortedChats = [...myChats].sort((a, b) => {
-    const lastA = myHistory[a.id]?.slice(-1)[0];
-    const lastB = myHistory[b.id]?.slice(-1)[0];
-    return (lastB?.time || '') > (lastA?.time || '') ? 1 : -1;
+els.saveNameBtn.onclick = () => {
+  const n = els.nameInput.value.trim();
+  if (!n) return;
+  socket.emit('set-display-name', n, res => {
+    if (res.ok) {
+      els.meLabel.textContent = n; els.meAvatar.textContent = initial(n);
+      els.name.style.display = 'none'; els.app.style.display = 'flex'; renderChats();
+    } else els.nameErr.textContent = res.error;
   });
+};
 
-  sortedChats.forEach(chat => {
-    const msgs = myHistory[chat.id] || [];
-    const last = msgs[msgs.length - 1];
-    
+function renderChats() {
+  els.chatList.innerHTML = '';
+  const q = searchQuery.toLowerCase();
+  
+  const filtered = myChats.filter(chat => {
     let title = chat.title;
     if (chat.type === 'private') {
       const other = chat.members.find(m => m !== myName);
-      title = allUsers.find(u => u.username === other)?.displayName || other;
+      title = findUser(other)?.displayName || other;
     }
-    if (chat.type === 'bot') title = '🤖 Messenger Bot';
+    return title.toLowerCase().includes(q);
+  });
+
+  filtered.sort((a, b) => {
+    const lastA = myHistory[a.id]?.slice(-1)[0]?.id || '';
+    const lastB = myHistory[b.id]?.slice(-1)[0]?.id || '';
+    return lastB.localeCompare(lastA);
+  });
+
+  filtered.forEach(chat => {
+    let title = chat.title;
+    if (chat.type === 'private') {
+      const other = chat.members.find(m => m !== myName);
+      title = findUser(other)?.displayName || other;
+    }
+    const msgs = myHistory[chat.id] || [];
+    const last = msgs[msgs.length - 1];
 
     const li = document.createElement('li');
     li.className = 'chat-item' + (chat.id === activeChatId ? ' active' : '');
@@ -101,183 +97,129 @@ function renderChats() {
       <div class="chat-item__avatar" style="background:${chat.color}">${initial(title)}</div>
       <div class="chat-item__body">
         <div class="chat-item__top">
-          <span class="chat-item__name">${escapeHtml(title)}</span>
+          <span class="chat-item__name">${esc(title)}</span>
           <span class="chat-item__time">${last ? last.time : ''}</span>
         </div>
-        <div class="chat-item__last">${last ? (last.from === myName ? 'Вы: ' : '') + escapeHtml(last.text || '🎨') : 'Нет сообщений'}</div>
+        <div class="chat-item__last">${last ? (last.from === myName ? 'Вы: ' : '') + esc(last.text || '🎨') : 'Нет сообщений'}</div>
       </div>
     `;
-    li.addEventListener('click', () => openChat(chat.id));
-    chatListEl.appendChild(li);
+    li.onclick = () => openChat(chat.id);
+    els.chatList.appendChild(li);
   });
 }
 
-// Открытие чата
-function openChat(chatId) {
-  activeChatId = chatId;
-  const chat = myChats.find(c => c.id === chatId);
-  if (!chat) return;
+els.search.oninput = e => { searchQuery = e.target.value; renderChats(); };
 
+function openChat(id) {
+  activeChatId = id;
+  const chat = myChats.find(c => c.id === id);
+  if (!chat) return;
   let title = chat.title;
   if (chat.type === 'private') {
     const other = chat.members.find(m => m !== myName);
-    title = allUsers.find(u => u.username === other)?.displayName || other;
+    title = findUser(other)?.displayName || other;
   }
-  if (chat.type === 'bot') title = '🤖 Messenger Bot';
-
-  chatAvatarEl.textContent = initial(title);
-  chatAvatarEl.style.background = chat.color;
-  chatNameEl.textContent = title;
-  chatStatusEl.textContent = chat.type === 'group' ? 'группа' : chat.type === 'channel' ? 'канал' : chat.type === 'bot' ? 'бот' : 'личный чат';
-
-  // Права на ввод
+  els.chatAvatar.textContent = initial(title); els.chatAvatar.style.background = chat.color;
+  els.chatName.textContent = title;
+  els.chatStatus.textContent = chat.type === 'group' ? 'группа' : chat.type === 'channel' ? 'канал' : chat.type === 'bot' ? 'бот' : 'личный чат';
+  
   if (chat.type === 'channel' && chat.owner !== myName) {
-    input.disabled = true; sendBtn.disabled = true;
-    input.placeholder = 'Только владелец может писать';
+    els.input.disabled = true; els.sendBtn.disabled = true; els.input.placeholder = 'Только владелец может писать';
   } else {
-    input.disabled = false; sendBtn.disabled = false;
-    input.placeholder = 'Сообщение';
+    els.input.disabled = false; els.sendBtn.disabled = false; els.input.placeholder = 'Сообщение';
   }
-
-  renderMessages();
-  renderChats();
-  document.body.classList.add('chat-open');
+  renderMessages(); renderChats(); document.body.classList.add('chat-open');
 }
 
-// Рендер сообщений
 function renderMessages() {
-  messagesEl.innerHTML = '';
+  els.msgs.innerHTML = '';
   const msgs = myHistory[activeChatId] || [];
   const chat = myChats.find(c => c.id === activeChatId);
-  
   msgs.forEach(m => {
     const div = document.createElement('div');
-    const isOut = m.from === myName;
-    div.className = 'msg ' + (isOut ? 'out' : 'in');
-    
+    const out = m.from === myName;
+    div.className = 'msg ' + (out ? 'out' : 'in');
     if (m.type === 'sticker') {
-      div.classList.add('msg--sticker');
-      div.innerHTML = `<span>${m.text}</span>`;
+      div.classList.add('msg--sticker'); div.innerHTML = `<span>${m.text}</span>`;
     } else {
       let author = '';
-      if (!isOut && (chat.type === 'group' || chat.type === 'channel')) {
-        const u = allUsers.find(u => u.username === m.from);
-        author = `<div class="msg__author" style="color:${u?.color || 'inherit'}">${escapeHtml(u?.displayName || m.from)}</div>`;
+      if (!out && (chat.type === 'group' || chat.type === 'channel')) {
+        const u = findUser(m.from);
+        author = `<div class="msg__author" style="color:${u?.color || 'inherit'}">${esc(u?.displayName || m.from)}</div>`;
       }
-      div.innerHTML = `${author}${escapeHtml(m.text)}<span class="msg__time">${m.time}</span>`;
+      div.innerHTML = `${author}${esc(m.text)}<span class="msg__time">${m.time}</span>`;
     }
-    messagesEl.appendChild(div);
+    els.msgs.appendChild(div);
   });
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  els.msgs.scrollTop = els.msgs.scrollHeight;
 }
 
-// Отправка
-composer.addEventListener('submit', (e) => {
+els.composer.onsubmit = e => {
   e.preventDefault();
-  const text = input.value.trim();
-  if (!text || !activeChatId) return;
-  socket.emit('send', { chatId: activeChatId, text });
-  input.value = '';
-});
+  const t = els.input.value.trim();
+  if (!t || !activeChatId) return;
+  socket.emit('send', { chatId: activeChatId, text: t });
+  els.input.value = '';
+};
 
-// Прием сообщений
 socket.on('message', ({ chatId, msg }) => {
   if (!myHistory[chatId]) myHistory[chatId] = [];
   myHistory[chatId].push(msg);
-  
   if (chatId === activeChatId) renderMessages();
   renderChats();
 });
-
-// Новый чат
-socket.on('new-chat', (chat) => {
-  if (!myChats.find(c => c.id === chat.id)) {
-    myChats.push(chat);
-    if (!myHistory[chat.id]) myHistory[chat.id] = [];
-    renderChats();
-  }
+socket.on('new-chat', chat => {
+  if (!myChats.find(c => c.id === chat.id)) { myChats.push(chat); myHistory[chat.id] = myHistory[chat.id] || []; renderChats(); }
+});
+socket.on('users', list => {
+  allUsers = list.filter(u => u.username !== myName);
+  renderChats(); if (activeChatId) renderMessages();
 });
 
-// Создание чатов
-createBtn.addEventListener('click', () => {
-  createModal.classList.add('open');
-  createMenu.style.display = 'flex';
-  createForm.style.display = 'none';
+els.createModal.querySelectorAll('[data-close]').forEach(el => el.onclick = () => els.createModal.classList.remove('open'));
+els.createMenu.querySelectorAll('.create-item').forEach(btn => {
+  btn.onclick = () => {
+    createType = btn.dataset.type; els.createMenu.style.display = 'none'; els.createForm.style.display = 'flex';
+    els.newTitle.placeholder = createType === 'private' ? 'Имя друга' : 'Название';
+    els.newMembers.innerHTML = (createType === 'group' || createType === 'channel') ? allUsers.map(u => `<label class="member-check"><input type="checkbox" value="${u.username}"> ${esc(u.displayName)}</label>`).join('') : '';
+  };
 });
-
-document.querySelectorAll('.create-item').forEach(btn => {
-  btn.addEventListener('click', () => {
-    createType = btn.dataset.type;
-    createMenu.style.display = 'none';
-    createForm.style.display = 'flex';
-    
-    if (createType === 'private') {
-      newTitle.placeholder = 'Имя пользователя (username)';
-      newMembers.innerHTML = '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Введите username друга</div>';
-    } else if (createType === 'bot') {
-      newTitle.placeholder = 'Имя бота';
-      newMembers.innerHTML = '';
-    } else {
-      newTitle.placeholder = 'Название ' + (createType === 'group' ? 'группы' : 'канала');
-      renderMemberChecks();
-    }
+els.createSubmit.onclick = () => {
+  const title = els.newTitle.value.trim(); if (!title) return;
+  let members = createType === 'private' ? [title] : Array.from(els.newMembers.querySelectorAll('input:checked')).map(i => i.value);
+  socket.emit('create-chat', { type: createType, title, members }, res => {
+    if (res.ok) { els.createModal.classList.remove('open'); if (!myChats.find(c => c.id === res.chat.id)) myChats.push(res.chat); openChat(res.chat.id); }
   });
-});
+};
 
-function renderMemberChecks() {
-  newMembers.innerHTML = allUsers.filter(u => u.username !== myName).map(u => `
-    <label class="member-check">
-      <input type="checkbox" value="${u.username}">
-      <span>${escapeHtml(u.displayName)} (@${u.username})</span>
-    </label>
-  `).join('');
-}
-
-createSubmit.addEventListener('click', () => {
-  const title = newTitle.value.trim();
-  if (!title) return;
-
-  let members = [];
-  if (createType === 'private') {
-    members = [title]; // В поле ввода username друга
-  } else if (createType === 'group' || createType === 'channel') {
-    members = Array.from(newMembers.querySelectorAll('input:checked')).map(i => i.value);
-  } else if (createType === 'bot') {
-    members = [myName];
-  }
-
-  socket.emit('create-chat', { type: createType, title, members }, (res) => {
-    if (res.ok) {
-      createModal.classList.remove('open');
-      if (!myChats.find(c => c.id === res.chat.id)) {
-        myChats.push(res.chat);
-      }
-      openChat(res.chat.id);
-    }
-  });
-});
-
-// Стикеры
 const STICKERS = ['😀','😂','🥰','😎','🤔','😴','🤯','🥳','😭','🤬','👻','💩','🤖','👽','🐱','🐶','🐼','🦊','🍕','🍔','🍰','🍺','⚽','🎮','🎸','🚗','✈️','🏆','❤️','🔥','⭐','💎'];
+els.stickerBtn.onclick = () => {
+  els.stickerGrid.innerHTML = STICKERS.map(s => `<button class="sticker-item">${s}</button>`).join('');
+  els.stickerGrid.querySelectorAll('.sticker-item').forEach(b => b.onclick = () => { socket.emit('send', { chatId: activeChatId, text: b.textContent, type: 'sticker' }); els.stickerSheet.classList.remove('open'); });
+  els.stickerSheet.classList.add('open');
+};
 
-stickerBtn.addEventListener('click', () => {
-  stickerGrid.innerHTML = STICKERS.map(s => `<button class="sticker-item" data-sticker="${s}">${s}</button>`).join('');
-  stickerGrid.querySelectorAll('.sticker-item').forEach(btn => {
-    btn.addEventListener('click', () => {
-      socket.emit('send', { chatId: activeChatId, text: btn.dataset.sticker, type: 'sticker' });
-      stickerSheet.classList.remove('open');
-    });
-  });
-  stickerSheet.classList.add('open');
-});
+const GIFTS = ['🌹','🍫','🧸','🎂','💎','🎈','🎁','🌷','🍰','🏆','🐱','💝'];
+els.giftBtn.onclick = () => {
+  els.giftGrid.innerHTML = GIFTS.map(g => `<button class="gift-item">${g}</button>`).join('');
+  els.giftGrid.querySelectorAll('.gift-item').forEach(b => b.onclick = () => { socket.emit('send-gift', { chatId: activeChatId, emoji: b.textContent }); els.giftSheet.classList.remove('open'); });
+  els.giftSheet.classList.add('open');
+};
 
-// Закрытие модалок
-document.querySelectorAll('[data-close]').forEach(el => {
-  el.addEventListener('click', () => el.closest('.modal, .sheet').classList.remove('open'));
-});
+document.querySelectorAll('[data-close]').forEach(el => el.onclick = () => el.closest('.modal, .sheet').classList.remove('open'));
 
-// Мобильная кнопка назад
-backBtn.addEventListener('click', () => {
-  document.body.classList.remove('chat-open');
-  activeChatId = null;
-});
+els.settingsBtn.onclick = () => { els.settingsBody.innerHTML = `
+  <div class="settings-section"><h3>Тема</h3>
+    <div class="settings-row"><select id="selTheme"><option value="light" ${settings.theme==='light'?'selected':''}>Светлая</option><option value="dark" ${settings.theme==='dark'?'selected':''}>Тёмная</option></select></div>
+    <div class="settings-row"><select id="selFont"><option value="small" ${settings.fontSize==='small'?'selected':''}>Мелкий</option><option value="medium" ${settings.fontSize==='medium'?'selected':''}>Средний</option><option value="large" ${settings.fontSize==='large'?'selected':''}>Крупный</option></select></div>
+  </div>`; 
+  els.settingsScreen.classList.add('open');
+  document.getElementById('selTheme').onchange = e => { settings.theme = e.target.value; applySettings(); };
+  document.getElementById('selFont').onchange = e => { settings.fontSize = e.target.value; applySettings(); };
+};
+els.settingsBack.onclick = () => els.settingsScreen.classList.remove('open');
+
+els.adminBtn.onclick = () => { socket.emit('admin:get-data', res => { els.adminBody.innerHTML = res.ok ? '<div class="settings-section">Админка работает</div>' : 'Нет доступа'; }); els.adminScreen.classList.add('open'); };
+els.adminBack.onclick = () => els.adminScreen.classList.remove('open');
+
+els.backBtn.onclick = () => { document.body.classList.remove('chat-open'); activeChatId = null; };

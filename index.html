@@ -7,20 +7,28 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Вход -->
   <div class="login" id="loginScreen">
     <div class="login__box">
       <div class="login__logo">💬</div>
       <h1>Мессенджер</h1>
       <p>Войди или создай аккаунт</p>
-      <input type="text" id="loginInput" placeholder="username (латиница)" maxlength="20">
+      <input type="text" id="loginInput" placeholder="username" maxlength="20">
       <input type="password" id="passwordInput" placeholder="Пароль" maxlength="64">
       <button id="loginBtn">Войти</button>
       <div class="login__error" id="loginError"></div>
     </div>
   </div>
 
-  <!-- Приложение -->
+  <div class="login" id="nameScreen" style="display:none">
+    <div class="login__box">
+      <div class="login__logo">✨</div>
+      <h1>Как тебя зовут?</h1>
+      <input type="text" id="displayNameInput" placeholder="Имя" maxlength="30">
+      <button id="saveNameBtn">Продолжить</button>
+      <div class="login__error" id="nameError"></div>
+    </div>
+  </div>
+
   <div class="app" id="appScreen" style="display:none">
     <aside class="sidebar">
       <header class="sidebar__header">
@@ -28,7 +36,8 @@
           <div class="me__avatar" id="meAvatar">?</div>
           <div class="me__name" id="meLabel">—</div>
         </button>
-        <button class="icon-btn" id="createBtn">➕</button>
+        <button class="icon-btn" id="adminBtn" style="display:none">🛡</button>
+        <button class="icon-btn" id="settingsBtn">⚙</button>
       </header>
 
       <div class="search-wrap">
@@ -49,54 +58,59 @@
             <div class="chat__status" id="chatStatus"></div>
           </div>
         </button>
+        <button class="icon-btn" id="giftBtn" title="Подарок" style="margin-left:auto; display:none">🎁</button>
       </header>
 
       <div class="messages" id="messages"></div>
 
       <form class="composer" id="composer">
         <button type="button" class="icon-btn" id="stickerBtn">😊</button>
-        <input type="text" id="messageInput" placeholder="Сообщение" autocomplete="off" disabled>
+        <input type="text" id="messageInput" placeholder="Сообщение" disabled>
         <button type="submit" class="send-btn" id="sendBtn" disabled>➤</button>
       </form>
     </main>
   </div>
 
-  <!-- Модалка создания -->
   <div class="modal" id="createModal">
     <div class="modal__backdrop" data-close></div>
     <div class="modal__box">
       <button class="modal__close" data-close>✕</button>
-      <h2 class="modal__title">Создать</h2>
-      
       <div class="create-menu" id="createMenu">
-        <button class="create-item" data-type="private">
-          <span>👤</span> Личный чат
-        </button>
-        <button class="create-item" data-type="group">
-          <span>👥</span> Группа
-        </button>
-        <button class="create-item" data-type="channel">
-          <span>📢</span> Канал
-        </button>
-        <button class="create-item" data-type="bot">
-          <span>🤖</span> Бот
-        </button>
+        <button class="create-item" data-type="private"><span>👤</span> Личный чат</button>
+        <button class="create-item" data-type="group"><span>👥</span> Группа</button>
+        <button class="create-item" data-type="channel"><span>📢</span> Канал</button>
       </div>
-
       <div class="create-form" id="createForm" style="display:none">
         <input type="text" id="newTitle" placeholder="Название">
-        <div id="newMembers" class="members-list"></div>
+        <div id="newMembers"></div>
         <button class="btn-primary" id="createSubmit">Создать</button>
       </div>
     </div>
   </div>
 
-  <!-- Панель стикеров -->
   <div class="sheet" id="stickerSheet">
     <div class="sheet__backdrop" data-close></div>
-    <div class="sheet__box">
-      <div class="sticker-grid" id="stickerGrid"></div>
-    </div>
+    <div class="sheet__box"><div class="sticker-grid" id="stickerGrid"></div></div>
+  </div>
+
+  <div class="sheet" id="giftSheet">
+    <div class="sheet__backdrop" data-close></div>
+    <div class="sheet__box"><div class="gift-grid" id="giftGrid"></div></div>
+  </div>
+
+  <div class="modal" id="profileModal">
+    <div class="modal__backdrop" data-close></div>
+    <div class="modal__box"><div id="profileContent"></div></div>
+  </div>
+
+  <div class="settings" id="settingsScreen">
+    <header class="settings__header"><button class="icon-btn" id="settingsBack">←</button><h1>Настройки</h1></header>
+    <div class="settings__body" id="settingsBody"></div>
+  </div>
+
+  <div class="settings" id="adminScreen">
+    <header class="settings__header"><button class="icon-btn" id="adminBack">←</button><h1>🛡 Админка</h1></header>
+    <div class="settings__body" id="adminBody"></div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
