@@ -62,7 +62,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .msg--sticker { background: none !important; box-shadow: none !important; padding: 4px !important; }
 .msg--sticker span { font-size: 64px; }
 
-.composer { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); background: var(--bg-panel); align-items: center; }
+/* Медиа и кнопка старт */
+.msg--media { padding: 4px !important; max-width: 240px; }
+.msg--media img { width: 100%; border-radius: 10px; display: block; }
+.msg--media .msg__time { position: absolute; bottom: 6px; right: 8px; color: #fff; background: rgba(0,0,0,.5); padding: 2px 6px; border-radius: 10px; }
+.start-btn { padding: 8px 16px; background: var(--accent); color: #fff; border: none; border-radius: 8px; margin-top: 12px; cursor: pointer; font-weight: 600; font-size: 13px; }
+
+.composer { display: flex; gap: 6px; padding: 10px 16px; border-top: 1px solid var(--border); background: var(--bg-panel); align-items: center; }
 .composer input { flex: 1; padding: 11px 16px; border: 1px solid var(--border); border-radius: 22px; background: var(--bg-input); color: var(--text); outline: none; }
 .send-btn { background: var(--accent); color: #fff; border: none; border-radius: 50%; width: 42px; height: 42px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .back-btn { display: none; }
@@ -90,12 +96,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .settings-section { background: var(--bg-panel); border-radius: 14px; margin-bottom: 16px; overflow: hidden; }
 .settings-row { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-top: 1px solid var(--border); }
 .settings-row select { padding: 6px; border-radius: 8px; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); }
-.switch { position: relative; width: 44px; height: 26px; }
-.switch input { opacity: 0; width: 0; height: 0; }
-.switch-slider { position: absolute; inset: 0; background: var(--border); border-radius: 26px; cursor: pointer; transition: .2s; }
-.switch-slider::before { content: ''; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
-.switch input:checked + .switch-slider { background: var(--accent); }
-.switch input:checked + .switch-slider::before { transform: translateX(18px); }
 
 @media (max-width: 700px) {
   .app { border: none; } .sidebar { width: 100%; border: none; }

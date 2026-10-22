@@ -31,7 +31,7 @@ function saveJSON(file, data) {
 let users = loadJSON(USERS_FILE, {});
 let history = loadJSON(HISTORY_FILE, {});
 let chats = loadJSON(CHATS_FILE, {});
-let bots = loadJSON(BOTS_FILE, {}); // { bot_username: { name, owner, description, replies: {} } }
+let bots = loadJSON(BOTS_FILE, {});
 
 const online = new Map();
 
@@ -69,21 +69,9 @@ function userChats(username) {
 function publicProfile(uname) {
   const u = users[uname];
   if (!u) return null;
-  let received = 0, sent = 0;
-  for (const msgs of Object.values(history)) {
-    for (const m of msgs) {
-      if (m.type === 'gift' || m.type === 'nft') {
-        if (m.to === uname) received++;
-        if (m.from === uname) sent++;
-      }
-    }
-  }
   return {
     username: uname, displayName: u.displayName || uname, color: u.color,
     online: online.has(uname), createdAt: u.createdAt,
-    stars: u.stars || 0, gifts: u.gifts || {},
-    giftTotal: Object.values(u.gifts || {}).reduce((s, n) => s + n, 0),
-    giftsReceived: received, giftsSent: sent,
     isAdmin: uname === ADMIN_USERNAME, banned: !!u.banned,
   };
 }
@@ -91,22 +79,6 @@ function publicProfile(uname) {
 function broadcastProfile(uname) {
   io.emit('users', publicUsers());
   io.emit('profile-updated', publicProfile(uname));
-}
-
-function getStats() {
-  let totalMessages = 0, totalGifts = 0, totalNfts = 0, totalStickers = 0;
-  for (const msgs of Object.values(history)) {
-    for (const m of msgs) {
-      if (m.type === 'text') totalMessages++;
-      if (m.type === 'gift') totalGifts++;
-      if (m.type === 'nft') totalNfts++;
-      if (m.type === 'sticker') totalStickers++;
-    }
-  }
-  return {
-    totalUsers: Object.keys(users).length, onlineUsers: online.size,
-    totalMessages, totalGifts, totalNfts, totalStickers,
-  };
 }
 
 // Обработка сообщений для ботов
@@ -118,8 +90,17 @@ function handleBotMessage(chatId, from, text) {
   const bot = bots[botName];
   if (!bot) return;
 
-  // Логика для Sticker Bot
   if (botName === 'StickerBot') {
+    if (text === '/start') {
+      const reply = `👋 Привет! Я StickerBot.\n\nОтправь мне любой текст или эмодзи, и я сделаю из него стикер.`;
+      const botMsg = { id: crypto.randomBytes(6).toString('hex'), from: 'system', type: 'text', text: reply, time: nowTime() };
+      history[chatId].push(botMsg); saveJSON(HISTORY_FILE, history);
+      chat.members.forEach(member => {
+        const sid = online.get(member);
+        if (sid) io.to(sid).emit('message', { chatId, msg: botMsg });
+      });
+      return;
+    }
     const reply = `🎨 Вот твой стикер!\n\n[${text}]\n\nОтправь любой текст или эмодзи, и я сделаю из него стикер.`;
     const botMsg = { id: crypto.randomBytes(6).toString('hex'), from: 'system', type: 'text', text: reply, time: nowTime() };
     history[chatId].push(botMsg); saveJSON(HISTORY_FILE, history);
@@ -130,13 +111,27 @@ function handleBotMessage(chatId, from, text) {
     return;
   }
 
-  // Логика для BotFather
   if (botName === 'BotFather') {
-    let reply = 'Я могу создать тебе бота. Просто отправь команду:\n/newbot ИмяБота';
+    if (text === '/start') {
+      const reply = `👋 Привет! Я BotFather.\n\nЯ могу создать тебе бота. Отправь команду:\n/newbot ИмяБота\n\n❗️ Имя бота должно заканчиваться на bot, _bot, robot или _robot.`;
+      const botMsg = { id: crypto.randomBytes(6).toString('hex'), from: 'system', type: 'text', text: reply, time: nowTime() };
+      history[chatId].push(botMsg); saveJSON(HISTORY_FILE, history);
+      chat.members.forEach(member => {
+        const sid = online.get(member);
+        if (sid) io.to(sid).emit('message', { chatId, msg: botMsg });
+      });
+      return;
+    }
+
+    let reply = 'Я могу создать тебе бота. Отправь команду:\n/newbot ИмяБота';
     if (text.startsWith('/newbot ')) {
       const newBotName = text.slice(8).trim();
+      const isValidSuffix = newBotName.endsWith('bot') || newBotName.endsWith('_bot') || newBotName.endsWith('robot') || newBotName.endsWith('_robot');
+      
       if (!newBotName || !isValidUsername(newBotName)) {
         reply = 'Ошибка: имя бота должно быть на латинице, 3-20 символов.';
+      } else if (!isValidSuffix) {
+        reply = 'Ошибка: имя бота должно заканчиваться на bot, _bot, robot или _robot.';
       } else if (bots[newBotName]) {
         reply = 'Ошибка: бот с таким именем уже существует.';
       } else {
@@ -147,7 +142,7 @@ function handleBotMessage(chatId, from, text) {
           replies: { 'привет': 'Привет! Я новый бот.', 'как дела': 'У меня всё отлично!' }
         };
         saveJSON(BOTS_FILE, bots);
-        reply = `✅ Бот @${newBotName} успешно создан!\nТеперь ты можешь найти его в поиске чатов.`;
+        reply = `✅ Бот @${newBotName} успешно создан!`;
       }
     }
     const botMsg = { id: crypto.randomBytes(6).toString('hex'), from: 'system', type: 'text', text: reply, time: nowTime() };
@@ -159,8 +154,17 @@ function handleBotMessage(chatId, from, text) {
     return;
   }
 
-  // Обычный бот (созданный пользователем)
   if (bot) {
+    if (text === '/start') {
+      const reply = `👋 Привет! Я ${botName}.`;
+      const botMsg = { id: crypto.randomBytes(6).toString('hex'), from: 'system', type: 'text', text: reply, time: nowTime() };
+      history[chatId].push(botMsg); saveJSON(HISTORY_FILE, history);
+      chat.members.forEach(member => {
+        const sid = online.get(member);
+        if (sid) io.to(sid).emit('message', { chatId, msg: botMsg });
+      });
+      return;
+    }
     let reply = bot.replies[text.toLowerCase()] || 'Я не знаю такой команды.';
     const botMsg = { id: crypto.randomBytes(6).toString('hex'), from: 'system', type: 'text', text: reply, time: nowTime() };
     history[chatId].push(botMsg); saveJSON(HISTORY_FILE, history);
@@ -198,7 +202,7 @@ io.on('connection', (socket) => {
     online.set(username, socket.id);
     socket.username = username;
 
-    // Создаем чаты с ботами при входе, если их нет
+    // Создаем чаты с системными ботами, если их нет
     const systemBots = [
       { id: 'bot_sticker', title: '🤖 StickerBot' },
       { id: 'bot_father', title: '🤖 BotFather' }
@@ -267,24 +271,6 @@ io.on('connection', (socket) => {
       if (sid) io.to(sid).emit('new-chat', newChat);
     });
     if (callback) callback({ ok: true, chat: newChat });
-  });
-
-  // Поиск ботов (для создания чата с новым ботом)
-  socket.on('find-bot', (botName, callback) => {
-    const b = bots[botName];
-    if (!b) return callback({ ok: false });
-    const chatId = 'bot_' + botName;
-    if (!chats[chatId]) {
-      chats[chatId] = { id: chatId, type: 'bot', title: '🤖 ' + botName, members: [], owner: 'system', color: colorFor(botName) };
-      saveJSON(CHATS_FILE, chats);
-    }
-    if (!chats[chatId].members.includes(socket.username)) {
-      chats[chatId].members.push(socket.username);
-      saveJSON(CHATS_FILE, chats);
-    }
-    const sid = online.get(socket.username);
-    if (sid) io.to(sid).emit('new-chat', chats[chatId]);
-    callback({ ok: true, chat: chats[chatId] });
   });
 
   socket.on('disconnect', () => {

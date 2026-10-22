@@ -4,7 +4,7 @@ let myName = null, myColor = '#3390ec', activeChatId = null;
 let myChats = [], myHistory = {}, allUsers = [], isAdmin = false;
 let searchQuery = '', createType = null;
 
-const defaultSettings = { theme: 'light', accent: 'blue', fontSize: 'medium', showOnline: true };
+const defaultSettings = { theme: 'light', accent: 'blue', fontSize: 'medium' };
 let settings = JSON.parse(localStorage.getItem('ms_settings') || '{}');
 function applySettings() {
   document.body.className = '';
@@ -23,6 +23,7 @@ const els = {
   chatAvatar: document.getElementById('chatAvatar'), chatName: document.getElementById('chatName'), chatStatus: document.getElementById('chatStatus'),
   msgs: document.getElementById('messages'), composer: document.getElementById('composer'), input: document.getElementById('messageInput'), sendBtn: document.getElementById('sendBtn'),
   backBtn: document.getElementById('backBtn'), stickerBtn: document.getElementById('stickerBtn'), giftBtn: document.getElementById('giftBtn'),
+  mediaBtn: document.getElementById('mediaBtn'), mediaInput: document.getElementById('mediaInput'),
   createModal: document.getElementById('createModal'), createMenu: document.getElementById('createMenu'), createForm: document.getElementById('createForm'),
   newTitle: document.getElementById('newTitle'), newMembers: document.getElementById('newMembers'), createSubmit: document.getElementById('createSubmit'),
   stickerSheet: document.getElementById('stickerSheet'), stickerGrid: document.getElementById('stickerGrid'),
@@ -66,7 +67,6 @@ els.saveNameBtn.onclick = () => {
 function renderChats() {
   els.chatList.innerHTML = '';
   const q = searchQuery.toLowerCase();
-  
   const filtered = myChats.filter(chat => {
     let title = chat.title;
     if (chat.type === 'private') {
@@ -135,12 +135,28 @@ function renderMessages() {
   els.msgs.innerHTML = '';
   const msgs = myHistory[activeChatId] || [];
   const chat = myChats.find(c => c.id === activeChatId);
+  
+  if (chat.type === 'bot' && msgs.length === 0) {
+    const startDiv = document.createElement('div');
+    startDiv.style.textAlign = 'center';
+    startDiv.style.margin = 'auto';
+    startDiv.innerHTML = `<button class="start-btn" id="startBotBtn">/start</button>`;
+    els.msgs.appendChild(startDiv);
+    document.getElementById('startBotBtn').onclick = () => {
+      socket.emit('send', { chatId: activeChatId, text: '/start' });
+    };
+  }
+
   msgs.forEach(m => {
     const div = document.createElement('div');
     const out = m.from === myName;
     div.className = 'msg ' + (out ? 'out' : 'in');
+    
     if (m.type === 'sticker') {
       div.classList.add('msg--sticker'); div.innerHTML = `<span>${m.text}</span>`;
+    } else if (m.type === 'media') {
+      div.classList.add('msg--media');
+      div.innerHTML = `<img src="${m.text}" alt="media"><span class="msg__time">${m.time}</span>`;
     } else {
       let author = '';
       if (!out && (chat.type === 'group' || chat.type === 'channel')) {
@@ -160,6 +176,19 @@ els.composer.onsubmit = e => {
   if (!t || !activeChatId) return;
   socket.emit('send', { chatId: activeChatId, text: t });
   els.input.value = '';
+};
+
+// Медиа
+els.mediaBtn.onclick = () => els.mediaInput.click();
+els.mediaInput.onchange = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    socket.emit('send', { chatId: activeChatId, text: ev.target.result, type: 'media' });
+    els.mediaInput.value = '';
+  };
+  reader.readAsDataURL(file);
 };
 
 socket.on('message', ({ chatId, msg }) => {

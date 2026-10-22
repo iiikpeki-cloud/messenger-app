@@ -64,13 +64,16 @@
       <div class="messages" id="messages"></div>
 
       <form class="composer" id="composer">
+        <button type="button" class="icon-btn" id="mediaBtn" title="Медиа">📎</button>
         <button type="button" class="icon-btn" id="stickerBtn">😊</button>
         <input type="text" id="messageInput" placeholder="Сообщение" disabled>
         <button type="submit" class="send-btn" id="sendBtn" disabled>➤</button>
       </form>
+      <input type="file" id="mediaInput" accept="image/*,video/*" style="display:none">
     </main>
   </div>
 
+  <!-- Модалки -->
   <div class="modal" id="createModal">
     <div class="modal__backdrop" data-close></div>
     <div class="modal__box">
